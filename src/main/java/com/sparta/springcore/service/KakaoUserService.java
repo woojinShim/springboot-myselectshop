@@ -40,10 +40,10 @@ public class KakaoUserService {
         // 1. "인가 코드"로 "액세스 토큰" 요청
         String accessToken = getAccessToken(code);
 
-        // 2. "액세스 토큰"으로 "카카오 사용자 정보" 가져오기
+        // 2. 토큰으로 카카오 API 호출
         KakaoUserInfoDto kakaoUserInfo = getKakaoUserInfo(accessToken);
 
-        // 3. "카카오 사용자 정보"로 필요시 회원가입
+        // 3. 필요시에 회원가입
         User kakaoUser = registerKakaoUserIfNeeded(kakaoUserInfo);
 
         // 4. 강제 로그인 처리
@@ -105,6 +105,7 @@ public class KakaoUserService {
         String email = jsonNode.get("kakao_account")
                 .get("email").asText();
 
+        System.out.println("카카오 사용자 정보: " + id + ", " + nickname + ", " + email);
         return new KakaoUserInfoDto(id, nickname, email);
     }
 
@@ -114,20 +115,30 @@ public class KakaoUserService {
         User kakaoUser = userRepository.findByKakaoId(kakaoId)
                 .orElse(null);
         if (kakaoUser == null) {
-            // 회원가입
-            // username: kakao nickname
-            String nickname = kakaoUserInfo.getNickname();
+            // 카카오 사용자 이메일과 동일한 이메일을 가진 회원이 있는지 확인
+            String kakaoEmail = kakaoUserInfo.getEmail();
+            User sameEmailUser = userRepository.findByEmail(kakaoEmail).orElse(null);
+            if (sameEmailUser != null) {
+                kakaoUser = sameEmailUser;
+                // 기존 회원정보에 카카오 Id 추가
+                kakaoUser.setKakaoId(kakaoId);
+            } else {
+                // 신규 회원가입
+                // username: kakao nickname
+                String nickname = kakaoUserInfo.getNickname();
 
-            // password: random UUID
-            String password = UUID.randomUUID().toString();
-            String encodedPassword = passwordEncoder.encode(password);
+                // password: random UUID
+                String password = UUID.randomUUID().toString();
+                String encodedPassword = passwordEncoder.encode(password);
 
-            // email: kakao email
-            String email = kakaoUserInfo.getEmail();
-            // role: 일반 사용자
-            UserRoleEnum role = UserRoleEnum.USER;
+                // email: kakao email
+                String email = kakaoUserInfo.getEmail();
+                // role: 일반 사용자
+                UserRoleEnum role = UserRoleEnum.USER;
 
-            kakaoUser = new User(nickname, encodedPassword, email, role, kakaoId);
+                kakaoUser = new User(nickname, encodedPassword, email, role, kakaoId);
+            }
+
             userRepository.save(kakaoUser);
         }
         return kakaoUser;
